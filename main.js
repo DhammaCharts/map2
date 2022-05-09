@@ -1,73 +1,55 @@
 import 'ol/ol.css';
-import ImageLayer from 'ol/layer/Image';
+import Layer from 'ol/layer/Layer';
 import Map from 'ol/Map';
-import Projection from 'ol/proj/Projection';
-import Static from 'ol/source/ImageStatic';
 import View from 'ol/View';
-import {getCenter} from 'ol/extent';
-import {getHeight} from 'ol/extent';
-import {getWidth} from 'ol/extent';
-// import Extent from 'ol/extent';
+import {composeCssTransform} from 'ol/transform';
 
-import Suttapitaka from './suttapitaka.svg'
-
-
-// Map views always need a projection.  Here we just want to map image
-// coordinates directly to map coordinates, so we create a projection that uses
-// the image extent in pixels.
-// const extent = [0, 0, 1, 1];
-// const projection = new Projection({
-//   code: 'xkcd-image',
-//   units: 'pixels',
-//   extent: extent,
-// });
-//
-// const map = new Map({
-//   layers: [
-//     new ImageLayer({
-//       source: new Static({
-//         attributions: '© <a href="https://xkcd.com/license.html">xkcd</a>',
-//         url: 'suttapitaka.svg',
-//         projection: projection,
-//         imageExtent: extent,
-//       }),
-//     }),
-//   ],
-//   target: 'map',
-//   view: new View({
-//     projection: projection,
-//     center: getCenter(extent),
-//     zoom: 2,
-//     maxZoom: 8,
-//   }),
-// });
-
-var extent = [0, 0, 3456/7, 5323/7];
-var projection = new Projection({
-  code: 'static-image',
-  units: 'pixels',
-  extent: extent
-});
-
-var map = new Map({
-  layers: [
-    new ImageLayer({
-      source: new Static({
-        url: Suttapitaka,
-        projection: projection,
-        imageExtent: extent,
-        imageLoadFunction: function (image, src) {
-           image.getImage().src = src;
-           image.getImage().width = getWidth(extent);
-           image.getImage().height = getHeight(extent);
-        }
-      })
-    })
-  ],
+const map = new Map({
   target: 'map',
   view: new View({
-    projection: projection,
-    center: getCenter(extent),
-    zoom: 2
-  })
+    center: [0, 0],
+    extent: [-180, -90, 180, 90],
+    projection: 'EPSG:4326',
+    zoom: 2,
+  }),
 });
+
+const svgContainer = document.createElement('div');
+const xhr = new XMLHttpRequest();
+xhr.open('GET', 'data/world.svg');
+xhr.addEventListener('load', function () {
+  const svg = xhr.responseXML.documentElement;
+  svgContainer.ownerDocument.importNode(svg);
+  svgContainer.appendChild(svg);
+});
+xhr.send();
+
+const width = 2560;
+const height = 1280;
+const svgResolution = 360 / width;
+svgContainer.style.width = width + 'px';
+svgContainer.style.height = height + 'px';
+svgContainer.style.transformOrigin = 'top left';
+svgContainer.className = 'svg-layer';
+
+map.addLayer(
+  new Layer({
+    render: function (frameState) {
+      const scale = svgResolution / frameState.viewState.resolution;
+      const center = frameState.viewState.center;
+      const size = frameState.size;
+      const cssTransform = composeCssTransform(
+        size[0] / 2,
+        size[1] / 2,
+        scale,
+        scale,
+        frameState.viewState.rotation,
+        -center[0] / svgResolution - width / 2,
+        center[1] / svgResolution - height / 2
+      );
+      svgContainer.style.transform = cssTransform;
+      svgContainer.style.opacity = this.getOpacity();
+      return svgContainer;
+    },
+  })
+);
